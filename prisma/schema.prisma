@@ -1,0 +1,183 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Business {
+  id                 String        @id @default(uuid())
+  name               String
+  slug               String        @unique
+  logoUrl            String?
+  industryType       String        @default("RETAIL")
+  subscriptionPlan   String        @default("FREE")
+  subscriptionStatus String        @default("ACTIVE")
+  whatsappPhoneId    String?       @unique
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  accessToken        String?
+  wabaId             String?
+  subscriptionStart  DateTime?    @default(now())
+  subscriptionEnd    DateTime?
+  accountManagerName  String?
+  accountManagerEmail String?
+  accountManagerPhone String?
+  pendingPlan         String?
+  paymentProofUrl     String?
+  lastWarningSentAt   DateTime?
+  chatSessions       ChatSession[]
+  customers          Customer[]
+  orders             Order[]
+  products           Product[]
+  users              User[]
+
+  @@map("businesses")
+}
+
+model User {
+  id             String   @id @default(uuid())
+  businessId     String
+  name           String
+  email          String
+  emailVerified  DateTime?
+  password       String
+  role           String   @default("STAFF")
+  permissions    Json?    
+  isActive       Boolean  @default(true)
+  otp            String?  
+  otpExpiresAt   DateTime?
+  createdAt      DateTime @default(now())
+  assignedOrders Order[]  @relation("AssignedOrders")
+  business       Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([email, businessId])
+  @@map("users")
+}
+
+model Product {
+  id            String      @id @default(uuid())
+  businessId    String
+  name          String
+  description   String?
+  price         Decimal     @db.Decimal(10, 2)
+  stockQuantity Int         @default(0)
+  category      String?     @default("Uncategorized")
+  isActive      Boolean     @default(true)
+  imageUrl      String?
+  attributes    Json?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  orderItems    OrderItem[]
+  business      Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@map("products")
+}
+
+model Customer {
+  id          String    @id @default(uuid())
+  businessId  String
+  phone       String
+  name        String
+  email       String?
+  address     String?
+  totalOrders Int       @default(0)
+  totalSpent  Decimal   @default(0) @db.Decimal(10, 2)
+  lastOrderAt DateTime?
+  createdAt   DateTime  @default(now())
+  business    Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  orders      Order[]
+
+  @@unique([phone, businessId])
+  @@map("customers")
+}
+
+model Order {
+  id            String      @id @default(uuid())
+  businessId    String
+  customerId    String
+  orderNumber   String      @unique
+  totalAmount   Decimal     @db.Decimal(10, 2)
+  status        String      @default("CONFIRMED")
+  paymentStatus String      @default("PENDING")
+  assignedTo    String?
+  notes         String?
+  createdAt     DateTime    @default(now())
+  items         OrderItem[]
+  assignee      User?       @relation("AssignedOrders", fields: [assignedTo], references: [id])
+  business      Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customer      Customer    @relation(fields: [customerId], references: [id])
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id          String  @id @default(uuid())
+  orderId     String
+  productId   String
+  productName String
+  quantity    Int
+  unitPrice   Decimal @db.Decimal(10, 2)
+  order       Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product     Product @relation(fields: [productId], references: [id])
+
+  @@map("order_items")
+}
+
+model ChatSession {
+  id                String        @id @default(uuid())
+  businessId        String
+  customerPhone     String
+  currentState      String        @default("MAIN_MENU")
+  label             String?
+  tempData          Json?
+  lastInteractionAt DateTime      @default(now())
+  messages          ChatMessage[]
+  business          Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, customerPhone])
+  @@map("chat_sessions")
+}
+
+model ChatMessage {
+  id            String      @id @default(uuid())
+  chatSessionId String
+  sender        String
+  content       String
+  createdAt     DateTime    @default(now())
+  chatSession   ChatSession @relation(fields: [chatSessionId], references: [id], onDelete: Cascade)
+
+  @@map("chat_messages")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  action     String
+  entityType String
+  entityId   String
+  entityName String?
+  actorEmail String
+  details    String?
+  ipAddress  String?
+  severity   String   @default("INFO")
+  createdAt  DateTime @default(now())
+
+  @@map("audit_logs")
+}
+
+model SubscriptionPlan {
+  id          String   @id @default(uuid())
+  name        String
+  slug        String   @unique // e.g., 'FREE', 'BASIC', 'PRO'
+  price       Decimal  @db.Decimal(10, 2)
+  description String?
+  features    String[] // PostgreSQL supports arrays. If using MySQL/SQLite, use String and split by comma.
+  isPopular   Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("subscription_plans")
+}
